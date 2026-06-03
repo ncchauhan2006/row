@@ -34,7 +34,10 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
+  padding-top: max(28px, env(safe-area-inset-top));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  padding-bottom: max(60px, env(safe-area-inset-bottom));
 }
 body::before {
   content: '';
@@ -590,7 +593,12 @@ body::after {
 .gm-status.gm-status-error { color: var(--danger); }
 
 @media (max-width: 480px) {
-  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
+  body {
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: max(50px, env(safe-area-inset-bottom));
+  }
   .gm-card { padding: 16px; }
   .gm-progress-num { font-size: 36px; }
 }
