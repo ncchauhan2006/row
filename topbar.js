@@ -468,7 +468,7 @@ html.light-theme .wt-photo-weight {
 
   function isFinancePage() {
     const p = (window.location.pathname || '').toLowerCase();
-    return p.endsWith('/finance.html') || p.endsWith('finance.html');
+    return p.indexOf('/finance') !== -1 || p.endsWith('finance') || p.endsWith('finance.html');
   }
   function isEmbedded() {
     try { return window.self !== window.top; } catch (e) { return true; }
@@ -476,8 +476,8 @@ html.light-theme .wt-photo-weight {
   function shouldShowChrome() { return !isFinancePage() && !isEmbedded(); }
   function currentPageKey() {
     const p = (window.location.pathname || '').toLowerCase();
-    if (p.endsWith('health.html')) return 'health';
-    if (p.endsWith('gym.html')) return 'fitness';
+    if (p.indexOf('/health') !== -1 || p.endsWith('health') || p.endsWith('health.html')) return 'health';
+    if (p.indexOf('/gym') !== -1 || p.endsWith('gym') || p.endsWith('gym.html')) return 'fitness';
     return 'main';
   }
 
@@ -565,8 +565,9 @@ html.light-theme .wt-photo-weight {
     };
   }
   async function pushWaterMergedToSupabase(localWater) {
-    if (window.location.pathname.endsWith('/health.html') ||
-        window.location.pathname.endsWith('health.html')) return;
+    const p = (window.location.pathname || '').toLowerCase();
+    const isHealth = p.indexOf('/health') !== -1 || p.endsWith('health') || p.endsWith('health.html');
+    if (isHealth) return;
     if (!window.supabase || !TOPBAR_SUPABASE_URL || !TOPBAR_SUPABASE_KEY) return;
     if (TOPBAR_SUPABASE_URL.indexOf('PASTE-') === 0) return;
     try {
