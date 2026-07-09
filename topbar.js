@@ -10,6 +10,14 @@
 (function () {
   'use strict';
 
+  // Apply theme immediately before injecting elements to prevent flashes
+  const currentTheme = localStorage.getItem('dashboard-theme');
+  if (currentTheme === 'light') {
+    document.documentElement.classList.add('light-theme');
+  } else {
+    document.documentElement.classList.remove('light-theme');
+  }
+
   // -------- Supabase config (replace with your own project URL + publishable key) --------
   const TOPBAR_SUPABASE_URL = 'https://ueaszyqknwxghvkwcwjo.supabase.co';
   const TOPBAR_SUPABASE_KEY = 'sb_publishable_Cf33A_7gzY3Es4yiwM4EdA_PNKG74iJ';
@@ -27,6 +35,20 @@
   background: #0a0a0b;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+}
+.topbar-theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.topbar-theme-toggle:hover { background: rgba(255, 255, 255, 0.08); }
+.topbar-theme-icon {
+  font-size: 20px; line-height: 1;
 }
 .topbar-water-wrap { display: flex; align-items: stretch; }
 .topbar-water-pill {
@@ -120,6 +142,8 @@ body.has-bottombar {
     padding-right: max(10px, env(safe-area-inset-right));
     gap: 6px;
   }
+  .topbar-theme-toggle { width: 40px; height: 38px; }
+  .topbar-theme-icon { font-size: 18px; }
   .topbar-water-pill { padding: 8px 11px; gap: 6px; }
   .topbar-pill-count { font-size: 12px; }
   .topbar-water-add { width: 40px; font-size: 18px; }
@@ -153,10 +177,270 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
     overflow-y: auto !important; overscroll-behavior: contain;
   }
 }
+
+/* ==========================================
+   LIGHT MODE AESTHETIC OVERRIDES
+   ========================================== */
+html.light-theme {
+  --bg: #F4F4F6;
+  --bg-deep: #EAEAEF;
+  --bg-card: #FFFFFF;
+  --bg-secondary: #F8F8FA;
+  --bg-input: #F3F3F6;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --text-primary: #1A1A1E;
+  --text-secondary: #4A4A52;
+  --text-tertiary: #8A8A96;
+  --text-quaternary: #A0A0B0;
+  
+  --text-1: #1A1A1E;
+  --text-2: rgba(0, 0, 0, 0.65);
+  --text-3: rgba(0, 0, 0, 0.45);
+  --text-4: rgba(0, 0, 0, 0.25);
+  
+  --accent: #E07658;
+}
+
+html.light-theme body {
+  background: #F4F4F6 !important;
+  color: #4A4A52 !important;
+}
+
+html.light-theme body::before {
+  background:
+    radial-gradient(circle at 82% 14%, rgba(224, 118, 88, 0.08), transparent 45%),
+    radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.08), transparent 50%) !important;
+}
+
+html.light-theme .topbar {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html.light-theme .topbar-water-pill {
+  background: rgba(125, 211, 252, 0.15) !important;
+  border: 1px solid rgba(125, 211, 252, 0.3) !important;
+  color: #0369a1 !important;
+}
+html.light-theme .topbar-pill-count {
+  color: #0369a1 !important;
+}
+html.light-theme .topbar-water-add {
+  border: 1px solid rgba(125, 211, 252, 0.3) !important;
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.4), rgba(110, 231, 183, 0.4)) !important;
+  color: #0369a1 !important;
+}
+html.light-theme .topbar-finance-btn {
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+html.light-theme .topbar-finance-icon {
+  filter: none !important;
+  opacity: 0.95 !important;
+}
+html.light-theme .topbar-theme-toggle {
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+html.light-theme .bottombar {
+  background: #FFFFFF !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html.light-theme .bottombar-tab {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+html.light-theme .bottombar-tab.active {
+  color: #1A1A1E !important;
+}
+html.light-theme .bottombar-tab-icon {
+  filter: grayscale(100%) brightness(0.5) !important;
+  opacity: 0.55 !important;
+}
+html.light-theme .bottombar-tab.active .bottombar-tab-icon {
+  filter: grayscale(100%) brightness(0.2) !important;
+  opacity: 1 !important;
+}
+
+html.light-theme .dash-title {
+  background: linear-gradient(180deg, #1A1A1E 0%, #5A5A66 120%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+html.light-theme .gm-card,
+html.light-theme .day-ring-wrap,
+html.light-theme .stack-card,
+html.light-theme .card,
+html.light-theme .nw-chart-wrap,
+html.light-theme .nw-donut-wrap {
+  background: #FFFFFF !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .gm-row,
+html.light-theme .stack-item,
+html.light-theme .sub-row,
+html.light-theme .nw-subcard,
+html.light-theme .nw-activity-row,
+html.light-theme .ord-card {
+  background: #F8F8FA !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+html.light-theme .gm-text,
+html.light-theme .stack-item-name,
+html.light-theme .nw-name,
+html.light-theme .ord-card-name {
+  color: #1A1A1E !important;
+}
+html.light-theme .gm-input,
+html.light-theme .stack-input,
+html.light-theme .search-input,
+html.light-theme .field input,
+html.light-theme .field select,
+html.light-theme .ord-input {
+  background: #F3F3F6 !important;
+  color: #1A1A1E !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html.light-theme .gm-input::placeholder,
+html.light-theme .stack-input::placeholder,
+html.light-theme .search-input::placeholder,
+html.light-theme .ord-input::placeholder {
+  color: #8A8A96 !important;
+}
+html.light-theme .gm-polish,
+html.light-theme .day-pill,
+html.light-theme .icon-btn,
+html.light-theme .why-toggle,
+html.light-theme .po-btn,
+html.light-theme .po-btn-icon,
+html.light-theme .po-seg-control {
+  background: #F3F3F6 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #1A1A1E !important;
+}
+html.light-theme .goal-ticker {
+  background: #FFFFFF !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .goal-ticker-row {
+  color: #1A1A1E !important;
+}
+html.light-theme .goal-ticker-meta {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #4A4A52 !important;
+}
+html.light-theme .day-ring-track {
+  stroke: rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .day-ring-percent {
+  color: #1A1A1E !important;
+}
+html.light-theme .stack-check {
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+html.light-theme .stack-ticker {
+  background: #F3F3F6 !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .stack-ticker-msg {
+  color: #1A1A1E !important;
+}
+html.light-theme .search-results {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.1) !important;
+}
+html.light-theme .search-result-name {
+  color: #1A1A1E !important;
+}
+html.light-theme .why-body {
+  background: #F8F8FA !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+html.light-theme .why-row .why-val {
+  color: #1A1A1E !important;
+}
+html.light-theme .hist-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .hist-count {
+  color: #4A4A52 !important;
+}
+html.light-theme .hist-bar-wrap {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+html.light-theme .spark-target {
+  stroke: rgba(0, 0, 0, 0.12) !important;
+}
+html.light-theme .modal-bg {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+html.light-theme .modal {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15) !important;
+}
+html.light-theme .seg {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+html.light-theme .seg button.active {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%) !important;
+  color: #0A0A0B !important;
+}
+html.light-theme .ord-add-grid {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+html.light-theme .ord-card-name {
+  color: #1A1A1E !important;
+}
+html.light-theme .ord-card-amt {
+  color: #1A1A1E !important;
+}
+html.light-theme .nw-amt {
+  color: #1A1A1E !important;
+}
+html.light-theme .po-title {
+  color: #1A1A1E !important;
+}
+html.light-theme .po-reps-pill {
+  background: #F3F3F6 !important;
+}
+html.light-theme .po-reps-val {
+  color: #1A1A1E !important;
+}
+html.light-theme .po-w-btn {
+  background: #F3F3F6 !important;
+  color: #1A1A1E !important;
+}
+html.light-theme .po-done-btn {
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+html.light-theme .wt-photo-card {
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: #F3F3F6 !important;
+}
+html.light-theme .wt-photo-meta {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #1A1A1E !important;
+}
+html.light-theme .wt-photo-date {
+  color: #1A1A1E !important;
+}
+html.light-theme .wt-photo-weight {
+  color: #4A4A52 !important;
+}
 `;
 
   const topbarHtml = `
 <header class="topbar" id="topbar" role="navigation" aria-label="Quick actions">
+  <button class="topbar-theme-toggle" id="topbarThemeToggle" aria-label="Toggle theme" type="button">
+    <span class="topbar-theme-icon" id="topbarThemeIcon">☀️</span>
+  </button>
   <div class="topbar-water-wrap">
     <a href="health.html#water" class="topbar-water-pill" id="topbarWater" aria-label="Water progress">
       <span class="topbar-pill-dot"></span>
@@ -198,12 +482,14 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
   }
 
   function injectStyleAndHTML() {
+    if (!document.getElementById('topbar-style')) {
+      const style = document.createElement('style');
+      style.id = 'topbar-style';
+      style.textContent = css;
+      document.head.appendChild(style);
+    }
     if (document.getElementById('topbar') || document.getElementById('bottombar')) return;
     if (!shouldShowChrome()) return;
-    const style = document.createElement('style');
-    style.id = 'topbar-style';
-    style.textContent = css;
-    document.head.appendChild(style);
     const topWrap = document.createElement('div');
     topWrap.innerHTML = topbarHtml.trim();
     document.body.insertBefore(topWrap.firstChild, document.body.firstChild);
@@ -338,10 +624,49 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
     sync();
   }
 
+  function renderThemeToggle() {
+    const iconEl = document.getElementById('topbarThemeIcon');
+    if (!iconEl) return;
+    const isLight = document.documentElement.classList.contains('light-theme');
+    iconEl.textContent = isLight ? '🌙' : '☀️';
+  }
+
   function boot() {
     injectStyleAndHTML();
     const btn = document.getElementById('topbarWaterAdd');
     if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); addWater(); });
+    
+    const themeBtn = document.getElementById('topbarThemeToggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isLight = document.documentElement.classList.toggle('light-theme');
+        localStorage.setItem('dashboard-theme', isLight ? 'light' : 'dark');
+        renderThemeToggle();
+        
+        // Post message to any iframes on the page (like the water tracker embed)
+        // so they also toggle their theme instantly!
+        document.querySelectorAll('iframe').forEach(iframe => {
+          try {
+            iframe.contentWindow.postMessage({ type: 'theme-changed', theme: isLight ? 'light' : 'dark' }, '*');
+          } catch(err) {}
+        });
+      });
+    }
+    
+    // Listen for theme change message in embedded iframe
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'theme-changed') {
+        if (e.data.theme === 'light') {
+          document.documentElement.classList.add('light-theme');
+        } else {
+          document.documentElement.classList.remove('light-theme');
+        }
+        renderThemeToggle();
+      }
+    });
+
+    renderThemeToggle();
     render();
     lockGestures();
     startModalLock();
