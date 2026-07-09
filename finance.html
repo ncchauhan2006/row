@@ -509,6 +509,22 @@
       </div>
     </section>
 
+    <!-- Spending Trend Chart -->
+    <section aria-label="Spending trend">
+      <div class="section-title">Spending Trend</div>
+      <div class="add-expense-card" style="padding: 18px 20px 14px; margin-bottom: 28px;">
+        <div class="card-label" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Last 7 Days Spending</span>
+          <span id="chartAverage" style="font-family: var(--font-mono); text-transform: none; font-size: 11px; color: var(--text-secondary);">Avg: ₹0/day</span>
+        </div>
+        <div class="trend-chart-container" style="position: relative;">
+          <svg id="trendChart" viewBox="0 0 320 140" preserveAspectRatio="none" style="width: 100%; height: 140px; display: block; overflow: visible;">
+            <!-- Dynamically populated -->
+          </svg>
+        </div>
+      </div>
+    </section>
+
     <!-- Add Expenditure Form -->
     <section aria-label="Log new expenditure">
       <div class="section-title">Log Expenditure</div>
@@ -698,9 +714,98 @@
         monthSpendEl.textContent = formatRupee(monthSpend);
       }
 
+      function renderChart() {
+        const trendChart = document.getElementById('trendChart');
+        const chartAverage = document.getElementById('chartAverage');
+        if (!trendChart) return;
+
+        // Generate last 7 days array (ending today)
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          days.push({
+            dateStr,
+            dayName: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+            amount: 0
+          });
+        }
+
+        // Aggregate spend per day
+        let totalLast7Days = 0;
+        expenses.forEach(item => {
+          const match = days.find(day => day.dateStr === item.date);
+          if (match) {
+            match.amount += Number(item.amount) || 0;
+            totalLast7Days += Number(item.amount) || 0;
+          }
+        });
+
+        // Calculations
+        const averageSpend = totalLast7Days / 7;
+        chartAverage.textContent = `Avg: ${formatRupee(averageSpend)}/day`;
+
+        const maxAmount = Math.max(...days.map(d => d.amount), 0) || 1000;
+
+        // SVG rendering parameters
+        // Width of viewBox: 320, Height: 140
+        // Baseline for bars: y = 110. Top limit: y = 20 (height limit: 90px)
+        const chartHeight = 90;
+        const baselineY = 110;
+        const barWidth = 24;
+        const spacing = 16;
+        const startX = 20;
+
+        let svgHtml = '';
+
+        // Add subtle horizontal grid lines (dashed)
+        const gridLines = [20, 65, 110];
+        gridLines.forEach(y => {
+          svgHtml += `<line x1="10" y1="${y}" x2="310" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"></line>`;
+        });
+
+        days.forEach((day, i) => {
+          const x = startX + i * (barWidth + spacing);
+          const barHeight = Math.max(day.amount > 0 ? 4 : 0, (day.amount / maxAmount) * chartHeight);
+          const y = baselineY - barHeight;
+
+          // Background guide track
+          svgHtml += `
+            <rect x="${x}" y="20" width="${barWidth}" height="${chartHeight}" rx="4" ry="4" style="fill: var(--bg-secondary); opacity: 0.5;"></rect>
+          `;
+
+          // Filled bar
+          if (day.amount > 0) {
+            svgHtml += `
+              <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" ry="4" fill="var(--accent)" style="transition: all 0.3s;"></rect>
+            `;
+            // Value text above the bar
+            svgHtml += `
+              <text x="${x + barWidth/2}" y="${y - 6}" fill="var(--text-primary)" font-size="9" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">₹${shortenAmount(day.amount)}</text>
+            `;
+          }
+
+          // Label text below the bar
+          svgHtml += `
+            <text x="${x + barWidth/2}" y="130" fill="var(--text-tertiary)" font-size="10" font-family="var(--font-mono)" font-weight="600" text-anchor="middle">${day.dayName}</text>
+          `;
+        });
+
+        trendChart.innerHTML = svgHtml;
+      }
+
+      function shortenAmount(amt) {
+        if (amt >= 1000) {
+          return (amt / 1000).toFixed(amt % 1000 === 0 ? 0 : 1) + 'k';
+        }
+        return Math.round(amt);
+      }
+
       // Render the expense items
       function render() {
         calculateSummary();
+        renderChart();
 
         if (expenses.length === 0) {
           emptyState.style.display = 'block';
