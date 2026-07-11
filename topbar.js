@@ -511,12 +511,17 @@ html.light-theme .wt-photo-weight {
       String(d.getMonth() + 1).padStart(2, '0') + '-' +
       String(d.getDate()).padStart(2, '0');
   }
+  let topbarRemoteTargetGoal = null;
+
   function getWaterProgress() {
     let state = null;
     try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
     if (!state) return { done: 0, total: 0 };
     const todayKey = calendarDateKey();
     const done = (state.logs || {})[todayKey] || 0;
+    if (topbarRemoteTargetGoal !== null) {
+      return { done, total: topbarRemoteTargetGoal };
+    }
     const p = state.profile || { weightKg: 75 };
     const wKg = state.weightUnit === 'lb' ? (p.weightKg || 0) / 2.20462 : (p.weightKg || 0);
     const base = wKg * 35;
@@ -597,11 +602,11 @@ html.light-theme .wt-photo-weight {
     if (!window.Appwrite) return;
     const k = calendarDateKey();
     const docId = `water_${k.replace(/-/g, '_')}`;
+    const client = new window.Appwrite.Client();
+    client.setEndpoint(TOPBAR_APPWRITE_ENDPOINT).setProject(TOPBAR_APPWRITE_PROJECT);
+    const databases = new window.Appwrite.Databases(client);
+
     try {
-      const client = new window.Appwrite.Client();
-      client.setEndpoint(TOPBAR_APPWRITE_ENDPOINT).setProject(TOPBAR_APPWRITE_PROJECT);
-      const databases = new window.Appwrite.Databases(client);
-      
       const doc = await databases.getDocument(TOPBAR_APPWRITE_DB, TOPBAR_APPWRITE_COLL, docId);
       const count = parseInt(doc.value) || 0;
       
@@ -615,6 +620,15 @@ html.light-theme .wt-photo-weight {
     } catch (e) {
       // 404 is ignored since it defaults count to 0 or local cache
     }
+
+    try {
+      const goalDoc = await databases.getDocument(TOPBAR_APPWRITE_DB, TOPBAR_APPWRITE_COLL, 'water_goal_target');
+      const goal = parseInt(goalDoc.value) || 0;
+      if (goal > 0) {
+        topbarRemoteTargetGoal = goal;
+        render();
+      }
+    } catch (e) {}
   }
 
   function addWater() {

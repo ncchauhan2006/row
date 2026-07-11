@@ -746,7 +746,7 @@ main {
         } catch (e) {
           if (e.code === 404) {
             await databases.createDocument(DATABASE_ID, COLLECTION_ID, docId, {
-              metric: 'Stack - ' + item.name,
+              metric: 'DailyStack - ' + item.name,
               value: 'Completed',
               date: dateStr
             });
@@ -1171,8 +1171,8 @@ main {
       let changed = false;
 
       res.documents.forEach(doc => {
-        if (doc.metric && doc.metric.startsWith('Stack - ') && doc.value === 'Completed' && doc.date === todayDateStr) {
-          const name = doc.metric.substring('Stack - '.length);
+        if (doc.metric && doc.metric.startsWith('DailyStack - ') && doc.value === 'Completed' && doc.date === todayDateStr) {
+          const name = doc.metric.substring('DailyStack - '.length);
           const items = getItems();
           const item = items.find(x => x.name === name);
           if (item && !taken[item.id]) {

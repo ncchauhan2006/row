@@ -727,8 +727,38 @@ html, body {
     s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};  // {YYYY-MM-DD: number_of_servings}
     return s;
   }
-  function saveState() {
+  
+  async function pushWaterGoalToAppwrite(goal) {
+    if (!window.Appwrite) return;
+    const docId = 'water_goal_target';
+    try {
+      try {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, {
+          value: goal.toString()
+        });
+      } catch (e) {
+        if (e.code === 404) {
+          await databases.createDocument(DATABASE_ID, COLLECTION_ID, docId, {
+            metric: 'water_goal_target',
+            value: goal.toString(),
+            date: 'all'
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function saveState() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+
+    const calc = computeTargetMl();
+    const targetUnits = Math.ceil(calc.total / unitVolMl());
+    if (remoteTargetGoal !== targetUnits) {
+      remoteTargetGoal = targetUnits;
+      await pushWaterGoalToAppwrite(targetUnits);
+    }
   }
   let state = loadState();
   $('appTitle').textContent = CONFIG.appTitle || 'Water Coach';
@@ -758,6 +788,15 @@ html, body {
         window.dispatchEvent(new Event('storage'));
       }
     }
+
+    try {
+      const goalDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, 'water_goal_target');
+      const goal = parseInt(goalDoc.value) || 0;
+      if (goal > 0) {
+        remoteTargetGoal = goal;
+        renderWater();
+      }
+    } catch (e) {}
   }
 
   // Trigger sync on load
@@ -860,7 +899,7 @@ html, body {
 
   function renderWater() {
     const calc = computeTargetMl();
-    const targetUnits = Math.ceil(calc.total / unitVolMl());
+    const targetUnits = remoteTargetGoal !== null ? remoteTargetGoal : Math.ceil(calc.total / unitVolMl());
     const count = todayCount();
     const unitName = unitLabelPlural();
 

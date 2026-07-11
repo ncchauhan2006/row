@@ -885,7 +885,7 @@ body::after {
       tasks = res.documents.map(doc => ({
         id: doc.$id,
         text: doc.title || '',
-        completed: !!doc.completed
+        completed: doc.completed === 'true'
       }));
       render();
     } catch (err) {
@@ -925,7 +925,7 @@ body::after {
           cb.disabled = true;
           try {
             await databases.updateDocument(DATABASE_ID, COLLECTION_ID, task.id, {
-              completed: cb.checked
+              completed: cb.checked ? 'true' : 'false'
             });
             task.completed = cb.checked;
             render();
@@ -1010,13 +1010,13 @@ body::after {
         Appwrite.ID.unique(),
         {
           title: text,
-          completed: false
+          completed: 'false'
         }
       );
       tasks.push({
         id: res.$id,
         text: res.title,
-        completed: !!res.completed
+        completed: false
       });
       goalInput.value = '';
       render();
