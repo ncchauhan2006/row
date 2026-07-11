@@ -714,10 +714,48 @@ main {
   function getLow() { return storeGet('stack:low') || []; }
   function setLow(arr) { storeSet('stack:low', arr); }
 
-  function toggleTaken(id) {
+  async function toggleTaken(id) {
     const taken = getTaken();
-    if (taken[id]) delete taken[id]; else taken[id] = Date.now();
-    setTaken(taken); render();
+    const items = getItems();
+    const item = items.find(x => x.id === id);
+    if (!item) return;
+
+    const dateStr = getActiveDate();
+    const docId = `stack_${id}_${dateStr.replace(/-/g, '_')}`;
+
+    if (taken[id]) {
+      delete taken[id];
+      setTaken(taken);
+      render();
+
+      try {
+        await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, docId);
+      } catch (err) {
+        console.error('Appwrite stack delete error:', err);
+      }
+    } else {
+      taken[id] = Date.now();
+      setTaken(taken);
+      render();
+
+      try {
+        try {
+          await databases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, {
+            value: 'Completed'
+          });
+        } catch (e) {
+          if (e.code === 404) {
+            await databases.createDocument(DATABASE_ID, COLLECTION_ID, docId, {
+              metric: 'Stack - ' + item.name,
+              value: 'Completed',
+              date: dateStr
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Appwrite stack save error:', err);
+      }
+    }
   }
   function toggleLow(id) {
     const low = getLow();
@@ -1126,6 +1164,29 @@ main {
         value: doc.value || '',
         date: doc.date || ''
       }));
+
+      // Parse today's stack completions from health_logs and apply to UI
+      const todayDateStr = getActiveDate();
+      const taken = getTaken();
+      let changed = false;
+
+      res.documents.forEach(doc => {
+        if (doc.metric && doc.metric.startsWith('Stack - ') && doc.value === 'Completed' && doc.date === todayDateStr) {
+          const name = doc.metric.substring('Stack - '.length);
+          const items = getItems();
+          const item = items.find(x => x.name === name);
+          if (item && !taken[item.id]) {
+            taken[item.id] = Date.now();
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        setTaken(taken);
+        render();
+      }
+
       renderHealthLogs();
     } catch (err) {
       console.error(err);
