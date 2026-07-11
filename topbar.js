@@ -721,7 +721,12 @@ html.light-theme .wt-photo-weight {
     loadTopbarWaterFromAppwrite();
     lockGestures();
     startModalLock();
-    window.addEventListener('storage', render);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'po_water_v1') {
+        topbarRemoteTargetGoal = null;
+      }
+      render();
+    });
     window.addEventListener('focus', render);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
     setInterval(render, 30 * 1000);

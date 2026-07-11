@@ -599,16 +599,7 @@ main {
 
   const TEMPLATE_VERSION = 5;
 
-  const STACK_DEFAULTS = [
-    { id: 'm1', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'm2', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: 'stack', ordered: true  },
-    { id: 'm3', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'l1', name: 'XXXXX - Supplement of choice', dose: '', window: 'lunch',   note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'l2', name: 'XXXXX - Supplement of choice', dose: '', window: 'lunch',   note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'e1', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'e2', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: 'not-ordered', ordered: false },
-    { id: 'e3', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-  ];
+  const STACK_DEFAULTS = [];
 
   const STACK_WINDOWS = [
     { key: 'morning', icon: '🌅', title: 'Morning', time: '7–10 AM', cutoffHour: 10 },
@@ -695,24 +686,60 @@ main {
     { name: 'Chaga', dose: '1–2g', window: 'morning', note: 'Antioxidant and immune', icon: '🍄', aliases: ['chaga'] },
   ];
 
-  let todayKey = `stack:taken:${getActiveDate()}`;
+  let inMemoryItems = [];
+  let inMemoryTaken = {};
+  let inMemoryLow = [];
 
   function getItems() {
-    const storedVersion = storeGet('stack:version');
-    const stored = storeGet('stack:items');
-    if (!stored || !Array.isArray(stored) || !stored.length || storedVersion !== TEMPLATE_VERSION) {
-      const fresh = JSON.parse(JSON.stringify(STACK_DEFAULTS));
-      storeSet('stack:items', fresh);
-      storeSet('stack:version', TEMPLATE_VERSION);
-      return fresh;
-    }
-    return stored;
+    return inMemoryItems;
   }
-  function setItems(items) { storeSet('stack:items', items); }
-  function getTaken() { return storeGet(todayKey) || {}; }
-  function setTaken(map) { storeSet(todayKey, map); }
-  function getLow() { return storeGet('stack:low') || []; }
-  function setLow(arr) { storeSet('stack:low', arr); }
+  async function setItems(items) {
+    inMemoryItems = items;
+    render();
+    if (!window.Appwrite) return;
+    try {
+      try {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_items', {
+          value: JSON.stringify(items)
+        });
+      } catch (e) {
+        if (e.code === 404) {
+          await databases.createDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_items', {
+            metric: 'health_stack_items',
+            value: JSON.stringify(items),
+            date: 'all'
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  function getTaken() { return inMemoryTaken; }
+  function setTaken(map) { inMemoryTaken = map; }
+  function getLow() { return inMemoryLow; }
+  async function setLow(arr) {
+    inMemoryLow = arr;
+    render();
+    if (!window.Appwrite) return;
+    try {
+      try {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_low', {
+          value: JSON.stringify(arr)
+        });
+      } catch (e) {
+        if (e.code === 404) {
+          await databases.createDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_low', {
+            metric: 'health_stack_low',
+            value: JSON.stringify(arr),
+            date: 'all'
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   async function toggleTaken(id) {
     const taken = getTaken();
@@ -1158,35 +1185,49 @@ main {
     metricsList.style.display = 'none';
     try {
       const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
-      healthLogs = res.documents.map(doc => ({
-        id: doc.$id,
-        metric: doc.metric || '',
-        value: doc.value || '',
-        date: doc.date || ''
-      }));
+
+      // Load Daily Stack items config
+      const stackItemsDoc = res.documents.find(d => d.metric === 'health_stack_items');
+      if (stackItemsDoc && stackItemsDoc.value) {
+        inMemoryItems = JSON.parse(stackItemsDoc.value);
+      } else {
+        inMemoryItems = [];
+      }
+
+      // Load Daily Stack low config
+      const stackLowDoc = res.documents.find(d => d.metric === 'health_stack_low');
+      if (stackLowDoc && stackLowDoc.value) {
+        inMemoryLow = JSON.parse(stackLowDoc.value);
+      } else {
+        inMemoryLow = [];
+      }
+
+      healthLogs = res.documents
+        .filter(doc => doc.metric !== 'health_stack_items' && doc.metric !== 'health_stack_low' && doc.metric !== 'water_goal_target')
+        .map(doc => ({
+          id: doc.$id,
+          metric: doc.metric || '',
+          value: doc.value || '',
+          date: doc.date || ''
+        }));
 
       // Parse today's stack completions from health_logs and apply to UI
       const todayDateStr = getActiveDate();
-      const taken = getTaken();
-      let changed = false;
+      const taken = {};
 
       res.documents.forEach(doc => {
         if (doc.metric && doc.metric.startsWith('DailyStack - ') && doc.value === 'Completed' && doc.date === todayDateStr) {
           const name = doc.metric.substring('DailyStack - '.length);
           const items = getItems();
           const item = items.find(x => x.name === name);
-          if (item && !taken[item.id]) {
+          if (item) {
             taken[item.id] = Date.now();
-            changed = true;
           }
         }
       });
 
-      if (changed) {
-        setTaken(taken);
-        render();
-      }
-
+      inMemoryTaken = taken;
+      render();
       renderHealthLogs();
     } catch (err) {
       console.error(err);
