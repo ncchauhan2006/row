@@ -6,8 +6,7 @@
   <meta name="theme-color" content="#0a0a0b">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Expenses</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="sync.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@26.1.0"></script>
   <script src="topbar.js" defer></script>
   <style>
     :root {
@@ -297,6 +296,11 @@
     .btn-log:active {
       transform: scale(0.97);
     }
+    .btn-log:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
     
     /* Expense List Section */
     .empty-state {
@@ -321,7 +325,7 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border-soft);
       border-radius: var(--radius-md);
-      transition: background 0.15s, border-color 0.15s;
+      transition: background 0.15s, border-color 0.15s, opacity 0.2s;
     }
     .expense-item:hover {
       background: var(--bg-card);
@@ -482,6 +486,14 @@
     .btn-primary:hover {
       opacity: 0.9;
     }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -556,7 +568,12 @@
     <!-- Expense List -->
     <section aria-label="Recent Expenditures">
       <div class="section-title">Recent Expenditures</div>
-      <div id="emptyState" class="empty-state">No expenditures logged yet.</div>
+      <div id="loadingState" class="empty-state" style="border-style: dashed;">
+        <div style="display: inline-block; width: 14px; height: 14px; border: 2px solid var(--text-tertiary); border-radius: 50%; border-top-color: var(--text-primary); animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;"></div>
+        Loading expenditures from Appwrite...
+      </div>
+      <div id="emptyState" class="empty-state" style="display: none;">No expenditures logged yet.</div>
+      <div id="errorState" class="empty-state" style="display: none; border-color: var(--danger); color: var(--danger);">Failed to connect to Appwrite.</div>
       <div id="expenseList" class="expense-list" style="display: none;"></div>
     </section>
   </div>
@@ -599,6 +616,16 @@
     (function () {
       'use strict';
 
+      // Appwrite Configuration
+      const client = new Appwrite.Client();
+      client
+        .setEndpoint('https://cloud.appwrite.io/v1')
+        .setProject('6a524830000a1a6c4eee');
+
+      const databases = new Appwrite.Databases(client);
+      const DATABASE_ID = '6a52491c00049194c4d1';
+      const COLLECTION_ID = 'expenses';
+
       let expenses = [];
       let editingExpenseId = null;
 
@@ -607,11 +634,14 @@
       const expDesc = document.getElementById('expDesc');
       const expAmount = document.getElementById('expAmount');
       const expDate = document.getElementById('expDate');
+      const addExpBtn = document.getElementById('addExpBtn');
       
       const weekSpendEl = document.getElementById('weekSpend');
       const monthSpendEl = document.getElementById('monthSpend');
       
+      const loadingState = document.getElementById('loadingState');
       const emptyState = document.getElementById('emptyState');
+      const errorState = document.getElementById('errorState');
       const expenseList = document.getElementById('expenseList');
 
       // Edit Modal DOM Selectors
@@ -658,21 +688,44 @@
         return '₹' + formatted;
       }
 
-      // Load expenses from local storage
-      function loadExpenses() {
+      // Fetch expenses from Appwrite
+      async function fetchExpenses() {
+        loadingState.style.display = 'block';
+        emptyState.style.display = 'none';
+        errorState.style.display = 'none';
+        expenseList.style.display = 'none';
+        
         try {
-          const raw = localStorage.getItem('expenses');
-          expenses = raw ? JSON.parse(raw) : [];
-        } catch (e) {
-          expenses = [];
+          const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
+          expenses = res.documents.map(doc => ({
+            id: doc.$id,
+            desc: doc.title || '',
+            amount: parseFloat(doc.amount) || 0, // CRITICAL DATA NOTE: Parse text amount to number
+            date: doc.date || ''
+          }));
+          loadingState.style.display = 'none';
+          
+          // Save local backup cache
+          try {
+            localStorage.setItem('local_expenses_backup', JSON.stringify(expenses));
+          } catch(e) {}
+          
+          render();
+        } catch (err) {
+          console.error('Appwrite fetch error:', err);
+          loadingState.style.display = 'none';
+          errorState.style.display = 'block';
+          errorState.textContent = 'Failed to fetch items from Appwrite: ' + (err.message || err);
+          
+          // Fallback to local storage backup if available
+          try {
+            const backup = localStorage.getItem('local_expenses_backup');
+            if (backup) {
+              expenses = JSON.parse(backup);
+              render();
+            }
+          } catch (e) {}
         }
-        render();
-      }
-
-      // Save expenses to local storage
-      function saveExpenses() {
-        localStorage.setItem('expenses', JSON.stringify(expenses));
-        render();
       }
 
       // Calculate totals
@@ -863,7 +916,7 @@
       }
 
       // Add expense form handler
-      expenseForm.addEventListener('submit', function (e) {
+      expenseForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const desc = expDesc.value.trim();
         const amt = parseFloat(expAmount.value);
@@ -871,24 +924,54 @@
 
         if (!desc || isNaN(amt) || amt <= 0 || !date) return;
 
-        const newExpense = {
-          id: 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-          desc: desc,
-          amount: amt,
-          date: date
-        };
+        addExpBtn.disabled = true;
+        const originalBtnHtml = addExpBtn.innerHTML;
+        addExpBtn.innerHTML = `
+          <div style="display: inline-block; width: 12px; height: 12px; border: 2px solid var(--bg); border-radius: 50%; border-top-color: var(--text-primary); animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></div>
+          Logging...
+        `;
 
-        expenses.push(newExpense);
-        saveExpenses();
+        try {
+          const res = await databases.createDocument(
+            DATABASE_ID,
+            COLLECTION_ID,
+            Appwrite.ID.unique(), // Appwrite ID unique
+            {
+              title: desc,
+              amount: amt.toString(), // amount stored as string/text
+              date: date
+            }
+          );
 
-        // Reset fields (keeping the date as the one just entered for rapid logging)
-        expDesc.value = '';
-        expAmount.value = '';
-        expDesc.focus();
+          expenses.push({
+            id: res.$id,
+            desc: res.title,
+            amount: parseFloat(res.amount) || 0,
+            date: res.date
+          });
+
+          // Save local backup cache
+          try {
+            localStorage.setItem('local_expenses_backup', JSON.stringify(expenses));
+          } catch(e) {}
+
+          render();
+
+          // Reset fields (keeping the date as the one just entered for rapid logging)
+          expDesc.value = '';
+          expAmount.value = '';
+          expDesc.focus();
+        } catch (err) {
+          console.error(err);
+          alert('Failed to log expense: ' + (err.message || err));
+        } finally {
+          addExpBtn.disabled = false;
+          addExpBtn.innerHTML = originalBtnHtml;
+        }
       });
 
       // Expense list action handler
-      expenseList.addEventListener('click', function (e) {
+      expenseList.addEventListener('click', async function (e) {
         const btn = e.target.closest('button');
         if (!btn) return;
         
@@ -898,8 +981,23 @@
 
         if (action === 'delete') {
           if (confirm('Are you sure you want to delete this expenditure?')) {
-            expenses = expenses.filter(item => item.id !== id);
-            saveExpenses();
+            const itemEl = document.querySelector(`.expense-item[data-id="${id}"]`);
+            if (itemEl) itemEl.style.opacity = '0.4';
+            
+            try {
+              await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
+              expenses = expenses.filter(item => item.id !== id);
+              
+              try {
+                localStorage.setItem('local_expenses_backup', JSON.stringify(expenses));
+              } catch(e) {}
+
+              render();
+            } catch (err) {
+              console.error(err);
+              alert('Failed to delete expense: ' + (err.message || err));
+              if (itemEl) itemEl.style.opacity = '1';
+            }
           }
         } else if (action === 'edit') {
           const item = expenses.find(x => x.id === id);
@@ -927,7 +1025,7 @@
       cancelModalBtn.addEventListener('click', closeModal);
       
       // Save edited modal changes
-      saveModalBtn.addEventListener('click', function () {
+      saveModalBtn.addEventListener('click', async function () {
         const id = editId.value;
         const desc = editDesc.value.trim();
         const amt = parseFloat(editAmount.value);
@@ -935,15 +1033,42 @@
 
         if (!desc || isNaN(amt) || amt <= 0 || !date) return;
 
-        expenses = expenses.map(item => {
-          if (item.id === id) {
-            return { ...item, desc, amount: amt, date };
-          }
-          return item;
-        });
+        saveModalBtn.disabled = true;
+        const originalBtnText = saveModalBtn.textContent;
+        saveModalBtn.textContent = 'Saving...';
 
-        saveExpenses();
-        closeModal();
+        try {
+          await databases.updateDocument(
+            DATABASE_ID,
+            COLLECTION_ID,
+            id,
+            {
+              title: desc,
+              amount: amt.toString(),
+              date: date
+            }
+          );
+
+          expenses = expenses.map(item => {
+            if (item.id === id) {
+              return { ...item, desc, amount: amt, date };
+            }
+            return item;
+          });
+
+          try {
+            localStorage.setItem('local_expenses_backup', JSON.stringify(expenses));
+          } catch(e) {}
+
+          closeModal();
+          render();
+        } catch (err) {
+          console.error(err);
+          alert('Failed to save changes: ' + (err.message || err));
+        } finally {
+          saveModalBtn.disabled = false;
+          saveModalBtn.textContent = originalBtnText;
+        }
       });
 
       // Close modal on escape or clicking outside card
@@ -957,37 +1082,12 @@
       // Initialize
       function init() {
         expDate.value = getTodayDateString();
-        loadExpenses();
+        fetchExpenses();
       }
 
       init();
 
-      // Listen for window storage changes (sync between tabs)
-      window.addEventListener('storage', function (e) {
-        if (e.key === 'expenses') {
-          loadExpenses();
-        }
-      });
-
-      // Expose loader to the sync system
-      window.loadExpensesData = loadExpenses;
-
     })();
-  </script>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      if (typeof initCloudSync !== 'function') return;
-      initCloudSync({
-        appKey: 'finance',
-        syncedKeys: ['expenses'],
-        onApplied: function () {
-          if (typeof window.loadExpensesData === 'function') {
-            window.loadExpensesData();
-          }
-        }
-      });
-    });
   </script>
 </body>
 </html>
