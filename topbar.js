@@ -18,9 +18,11 @@
     document.documentElement.classList.remove('light-theme');
   }
 
-  // -------- Supabase config (replace with your own project URL + publishable key) --------
-  const TOPBAR_SUPABASE_URL = 'https://ueaszyqknwxghvkwcwjo.supabase.co';
-  const TOPBAR_SUPABASE_KEY = 'sb_publishable_Cf33A_7gzY3Es4yiwM4EdA_PNKG74iJ';
+  // -------- Appwrite config --------
+  const TOPBAR_APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
+  const TOPBAR_APPWRITE_PROJECT = '6a524830000a1a6c4eee';
+  const TOPBAR_APPWRITE_DB = '6a52491c00049194c4d1';
+  const TOPBAR_APPWRITE_COLL = 'health_logs';
 
   // -------- CSS --------
   const css = `
@@ -564,24 +566,57 @@ html.light-theme .wt-photo-weight {
       caffeineMgPerDay: 200, substances: [], logs: {}
     };
   }
-  async function pushWaterMergedToSupabase(localWater) {
-    const p = (window.location.pathname || '').toLowerCase();
-    const isHealth = p.indexOf('/health') !== -1 || p.endsWith('health') || p.endsWith('health.html');
-    if (isHealth) return;
-    if (!window.supabase || !TOPBAR_SUPABASE_URL || !TOPBAR_SUPABASE_KEY) return;
-    if (TOPBAR_SUPABASE_URL.indexOf('PASTE-') === 0) return;
+  async function pushWaterToAppwrite(count) {
+    if (!window.Appwrite) return;
+    const k = calendarDateKey();
+    const docId = `water_${k.replace(/-/g, '_')}`;
     try {
-      const supa = window.supabase.createClient(TOPBAR_SUPABASE_URL, TOPBAR_SUPABASE_KEY);
-      const { data } = await supa
-        .from('app_state').select('data').eq('key', 'health').maybeSingle();
-      const current = (data && data.data) || {};
-      const merged = Object.assign({}, current, { po_water_v1: localWater });
-      await supa.from('app_state').upsert(
-        { key: 'health', data: merged, updated_at: new Date().toISOString() },
-        { onConflict: 'key' }
-      );
-    } catch (e) {}
+      const client = new window.Appwrite.Client();
+      client.setEndpoint(TOPBAR_APPWRITE_ENDPOINT).setProject(TOPBAR_APPWRITE_PROJECT);
+      const databases = new window.Appwrite.Databases(client);
+      
+      try {
+        await databases.updateDocument(TOPBAR_APPWRITE_DB, TOPBAR_APPWRITE_COLL, docId, {
+          value: count.toString()
+        });
+      } catch (e) {
+        if (e.code === 404) {
+          await databases.createDocument(TOPBAR_APPWRITE_DB, TOPBAR_APPWRITE_COLL, docId, {
+            metric: 'Water',
+            value: count.toString(),
+            date: k
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
   }
+
+  async function loadTopbarWaterFromAppwrite() {
+    if (!window.Appwrite) return;
+    const k = calendarDateKey();
+    const docId = `water_${k.replace(/-/g, '_')}`;
+    try {
+      const client = new window.Appwrite.Client();
+      client.setEndpoint(TOPBAR_APPWRITE_ENDPOINT).setProject(TOPBAR_APPWRITE_PROJECT);
+      const databases = new window.Appwrite.Databases(client);
+      
+      const doc = await databases.getDocument(TOPBAR_APPWRITE_DB, TOPBAR_APPWRITE_COLL, docId);
+      const count = parseInt(doc.value) || 0;
+      
+      let state = null;
+      try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
+      if (!state || typeof state !== 'object') state = defaultWaterState();
+      state.logs = state.logs || {};
+      state.logs[k] = count;
+      try { localStorage.setItem('po_water_v1', JSON.stringify(state)); } catch (e) {}
+      render();
+    } catch (e) {
+      // 404 is ignored since it defaults count to 0 or local cache
+    }
+  }
+
   function addWater() {
     let state = null;
     try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
@@ -593,7 +628,7 @@ html.light-theme .wt-photo-weight {
     render();
     const btn = document.getElementById('topbarWaterAdd');
     if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 220); }
-    pushWaterMergedToSupabase(state);
+    pushWaterToAppwrite(state.logs[k]);
   }
 
   function blockGesture(e) { e.preventDefault(); }
@@ -669,6 +704,7 @@ html.light-theme .wt-photo-weight {
 
     renderThemeToggle();
     render();
+    loadTopbarWaterFromAppwrite();
     lockGestures();
     startModalLock();
     window.addEventListener('storage', render);

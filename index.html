@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
 <title>NC's Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="sync.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@26.1.0"></script>
   <script src="topbar.js" defer></script>
 <style>
 :root {
@@ -692,44 +691,25 @@ body::after {
       <div id="tomorrowEmpty" class="empty-state">Nothing planned for tomorrow yet</div>
       <div class="goal-input-wrap gm-input-wrap">
         <input id="tomorrowInput" class="gm-input" type="text" placeholder="Add a goal for tomorrow…" autocomplete="off">
-        <button type="button" id="tomorrowAddBtn"    class="gm-add">+ Add</button>
-        <button type="button" id="tomorrowPolishBtn" class="gm-polish">✨ Polish</button>
-        <div class="gm-status" id="tomorrowStatus"></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/appwrite@26.1.0"></script>
 <script>
 (function () {
   'use strict';
 
-  // Paste your Anthropic key here to enable ✨ Polish. Empty = falls back to plain add.
-  const ANTHROPIC_API_KEY = '';
+  // Appwrite Configuration
+  const client = new Appwrite.Client();
+  client
+    .setEndpoint('https://sgp.cloud.appwrite.io/v1')
+    .setProject('6a524830000a1a6c4eee');
+
+  const databases = new Appwrite.Databases(client);
+  const DATABASE_ID = '6a52491c00049194c4d1';
+  const COLLECTION_ID = 'main_tasks';
+
+  let tasks = [];
 
   const WAKE_HOUR  = 8;
   const SLEEP_HOUR = 24;
-
-  // ---------- storage helpers ----------
-  function storeGet(key) {
-    try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
-  }
-  function storeSet(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
-    if (typeof key === 'string' && key.indexOf('goals:') === 0) {
-      window.dispatchEvent(new CustomEvent('goals-changed'));
-    }
-  }
-  function storeDelete(key) { try { localStorage.removeItem(key); } catch (e) {} }
-  function storeListKeys(prefix) {
-    const out = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.indexOf(prefix) === 0) out.push(k);
-    }
-    return out;
-  }
 
   // ---------- date helpers ----------
   function pad2(n) { return String(n).padStart(2, '0'); }
@@ -743,12 +723,6 @@ body::after {
     }
     return dateToKey(now);
   }
-  function getTomorrowDateString() {
-    const now = new Date();
-    const d = new Date(now);
-    if (now.getHours() >= 6) d.setDate(d.getDate() + 1);
-    return dateToKey(d);
-  }
   function formatDate(yyyy_mm_dd) {
     const parts = yyyy_mm_dd.split('-').map(Number);
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -757,61 +731,91 @@ body::after {
     return wk + ', ' + mo + ' ' + d.getDate();
   }
 
-  function todayKey()    { return 'goals:' + getActiveDateString(); }
-  function tomorrowKey() { return 'goals:' + getTomorrowDateString(); }
-
-  function getGoals(key) {
-    const g = storeGet(key);
-    return Array.isArray(g) ? g : [];
+  // ---------- Day Ring ----------
+  const PALETTE = [
+    [0,    [255, 216, 158]],
+    [12.5, [255, 205, 121]],
+    [25,   [255, 227, 143]],
+    [37.5, [255, 183, 106]],
+    [50,   [255, 149,  89]],
+    [62.5, [243, 111,  79]],
+    [75,   [226,  93, 122]],
+    [87.5, [123,  91, 176]],
+    [100,  [ 47,  58, 102]]
+  ];
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function paletteAt(p) {
+    if (p <= PALETTE[0][0]) return PALETTE[0][1];
+    if (p >= PALETTE[PALETTE.length - 1][0]) return PALETTE[PALETTE.length - 1][1];
+    for (let i = 0; i < PALETTE.length - 1; i++) {
+      const [p0, c0] = PALETTE[i];
+      const [p1, c1] = PALETTE[i + 1];
+      if (p >= p0 && p <= p1) {
+        const t = (p - p0) / (p1 - p0);
+        return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
+      }
+    }
+    return [255,255,255];
   }
-  function setGoals(key, list) { storeSet(key, list); }
-
-  // ---------- rollover: pull undone older goals into today ----------
-  function rollover() {
-    const todayDateStr = getActiveDateString();
-    const todayK = 'goals:' + todayDateStr;
-    let today = getGoals(todayK);
-    const texts = new Set(today.map(g => g.text));
-
-    storeListKeys('goals:').forEach(k => {
-      const dateStr = k.slice('goals:'.length);
-      if (dateStr >= todayDateStr) return;
-      const old = getGoals(k);
-      old.forEach(g => {
-        if (!g.done && g.text && !texts.has(g.text)) {
-          today.push({ text: g.text, done: false });
-          texts.add(g.text);
-        }
-      });
-      storeDelete(k);
-    });
-    setGoals(todayK, today);
+  function rgb(c) { return 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')'; }
+  function formatRemaining(totalMin) {
+    const h = Math.floor(totalMin / 60);
+    const m = Math.floor(totalMin % 60);
+    return h + 'h ' + m + 'm';
   }
 
-  // ---------- streak ----------
-  function loadStreak() {
-    const s = storeGet('goal_streak_v1');
-    if (s && typeof s.count === 'number') return s;
-    return { count: 0, lastProcessedDate: '' };
-  }
-  function saveStreak(s) { storeSet('goal_streak_v1', s); }
+  const C = 2 * Math.PI * 52;
+  const fillEl = document.getElementById('dayRingFill');
+  fillEl.setAttribute('stroke-dasharray', C);
+  fillEl.setAttribute('stroke-dashoffset', C);
 
-  function processStreak() {
-    const s = loadStreak();
-    const todayDateStr = getActiveDateString();
-    const keys = storeListKeys('goals:')
-      .map(k => k.slice('goals:'.length))
-      .filter(d => d < todayDateStr)
-      .sort();
-    keys.forEach(dateStr => {
-      if (s.lastProcessedDate && dateStr <= s.lastProcessedDate) return;
-      const list = getGoals('goals:' + dateStr);
-      if (list.length === 0) { /* don't break the streak on empty days */ }
-      else if (list.every(g => g.done)) s.count += 1;
-      else s.count = 0;
-      s.lastProcessedDate = dateStr;
-    });
-    saveStreak(s);
+  function updateDayRing() {
+    const now = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    const percentEl   = document.getElementById('dayRingPercent');
+    const phaseEl     = document.getElementById('dayRingPhase');
+    const clockEl     = document.getElementById('dayRingClock');
+    const statusEl    = document.getElementById('dayRingStatus');
+    const remainingEl = document.getElementById('dayRingRemaining');
+
+    clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (hours < WAKE_HOUR) {
+      fillEl.setAttribute('stroke-dashoffset', C);
+      fillEl.style.stroke = '#4D4B47';
+      percentEl.textContent = '—';
+      phaseEl.textContent   = 'SLEEPING';
+      statusEl.textContent  = '😴 Still sleeping';
+      remainingEl.textContent = formatRemaining((WAKE_HOUR - hours) * 60) + ' until wake-up';
+      return;
+    }
+
+    if (hours >= SLEEP_HOUR) {
+      fillEl.setAttribute('stroke-dashoffset', 0);
+      fillEl.style.stroke = '#E25D7A';
+      percentEl.textContent = '100%';
+      phaseEl.textContent   = 'PAST BEDTIME';
+      statusEl.textContent  = '⚠️ Past bedtime';
+      remainingEl.textContent = 'Sleep!';
+      return;
+    }
+
+    const span = SLEEP_HOUR - WAKE_HOUR;
+    const percent = (hours - WAKE_HOUR) / span * 100;
+    fillEl.setAttribute('stroke-dashoffset', C * (1 - percent / 100));
+    fillEl.style.stroke = rgb(paletteAt(percent));
+    percentEl.textContent = Math.floor(percent) + '%';
+
+    let phase, status;
+    if (percent < 25)      { phase = 'MORNING';   status = '☀️ Morning — fresh start'; }
+    else if (percent < 50) { phase = 'MIDDAY';    status = '⚡ Midday — keep moving'; }
+    else if (percent < 75) { phase = 'AFTERNOON'; status = '🌇 Afternoon — wrap up'; }
+    else                   { phase = 'EVENING';   status = '🌙 Evening — wind down'; }
+
+    phaseEl.textContent = phase;
+    statusEl.textContent = status;
+    const minsLeft = (SLEEP_HOUR - hours) * 60;
+    remainingEl.textContent = formatRemaining(minsLeft) + ' remaining';
   }
 
   // ---------- Goal Ticker ----------
@@ -821,12 +825,11 @@ body::after {
   let tickerTimer = null;
 
   function buildTickerItems() {
-    const goals = getGoals(todayKey());
-    const total = goals.length;
-    const done  = goals.filter(g => g.done).length;
-    if (total === 0) return { items: [{ status: 'empty',   text: 'No goals set for today — add one to get rolling.' }], done, total };
-    if (done === total) return { items: [{ status: 'done', text: '✓ All goals done — solid day.' }], done, total };
-    const items = goals.filter(g => !g.done).map(g => ({ status: 'pending', text: g.text }));
+    const done = tasks.filter(t => t.completed).length;
+    const total = tasks.length;
+    if (total === 0) return { items: [{ status: 'empty', text: 'No tasks set. Add one below.' }], done, total };
+    if (done === total) return { items: [{ status: 'done', text: '✓ All tasks completed — solid day.' }], done, total };
+    const items = tasks.filter(t => !t.completed).map(t => ({ status: 'pending', text: t.text }));
     return { items, done, total };
   }
 
@@ -875,458 +878,182 @@ body::after {
     tickerTimer = setInterval(tick, 5000);
   }
 
-  window.addEventListener('goals-changed', () => {
-    cycleIdx = 0;
-    tick();
-  });
-
-  // ---------- Day Ring ----------
-  const PALETTE = [
-    [0,    [255, 216, 158]],
-    [12.5, [255, 205, 121]],
-    [25,   [255, 227, 143]],
-    [37.5, [255, 183, 106]],
-    [50,   [255, 149,  89]],
-    [62.5, [243, 111,  79]],
-    [75,   [226,  93, 122]],
-    [87.5, [123,  91, 176]],
-    [100,  [ 47,  58, 102]]
-  ];
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function paletteAt(p) {
-    if (p <= PALETTE[0][0]) return PALETTE[0][1];
-    if (p >= PALETTE[PALETTE.length - 1][0]) return PALETTE[PALETTE.length - 1][1];
-    for (let i = 0; i < PALETTE.length - 1; i++) {
-      const [p0, c0] = PALETTE[i];
-      const [p1, c1] = PALETTE[i + 1];
-      if (p >= p0 && p <= p1) {
-        const t = (p - p0) / (p1 - p0);
-        return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
-      }
+  // ---------- Fetch Tasks ----------
+  async function fetchTasks() {
+    try {
+      const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
+      tasks = res.documents.map(doc => ({
+        id: doc.$id,
+        text: doc.text || '',
+        completed: !!doc.completed
+      }));
+      render();
+    } catch (err) {
+      console.error('Appwrite fetch error:', err);
+      const emptyState = document.getElementById('emptyState');
+      emptyState.textContent = 'Failed to load tasks from Appwrite.';
+      emptyState.style.display = 'block';
     }
-    return [255,255,255];
-  }
-  function rgb(c) { return 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')'; }
-
-  function formatClock(d) {
-    let h = d.getHours();
-    const m = d.getMinutes();
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    if (h === 0) h = 12;
-    return h + ':' + pad2(m) + ' ' + ampm;
-  }
-  function formatRemaining(totalMin) {
-    const h = Math.floor(totalMin / 60);
-    const m = Math.floor(totalMin % 60);
-    return h + 'h ' + m + 'm';
   }
 
-  const C = 2 * Math.PI * 52;
-  const fillEl = document.getElementById('dayRingFill');
-  fillEl.setAttribute('stroke-dasharray', C);
-  fillEl.setAttribute('stroke-dashoffset', C);
+  // ---------- Render Tasks Checklist ----------
+  function render() {
+    const listEl = document.getElementById('goalList');
+    const emptyState = document.getElementById('emptyState');
+    if (!listEl) return;
 
-  function updateDayRing() {
-    const now = new Date();
-    const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    const percentEl   = document.getElementById('dayRingPercent');
-    const phaseEl     = document.getElementById('dayRingPhase');
-    const clockEl     = document.getElementById('dayRingClock');
-    const statusEl    = document.getElementById('dayRingStatus');
-    const remainingEl = document.getElementById('dayRingRemaining');
+    listEl.innerHTML = '';
+    
+    const done = tasks.filter(t => t.completed).length;
+    const total = tasks.length;
+    
+    if (total === 0) {
+      emptyState.style.display = 'block';
+      emptyState.textContent = 'No tasks set. Add one below.';
+    } else {
+      emptyState.style.display = 'none';
+      tasks.forEach((task) => {
+        const li = document.createElement('li');
+        li.className = 'gm-row' + (task.completed ? ' gm-row-done' : '');
+        li.dataset.id = task.id;
 
-    clockEl.textContent = formatClock(now);
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'gm-check';
+        cb.checked = task.completed;
+        cb.addEventListener('change', async () => {
+          cb.disabled = true;
+          try {
+            await databases.updateDocument(DATABASE_ID, COLLECTION_ID, task.id, {
+              completed: cb.checked
+            });
+            task.completed = cb.checked;
+            render();
+          } catch(err) {
+            console.error(err);
+            cb.checked = !cb.checked;
+            cb.disabled = false;
+            alert('Failed to update task.');
+          }
+        });
+        li.appendChild(cb);
 
-    if (hours < WAKE_HOUR) {
-      fillEl.setAttribute('stroke-dashoffset', C);
-      fillEl.style.stroke = '#4D4B47';
-      percentEl.textContent = '—';
-      phaseEl.textContent   = 'SLEEPING';
-      statusEl.textContent  = '😴 Still sleeping';
-      const minsUntil = (WAKE_HOUR - hours) * 60;
-      remainingEl.textContent = formatRemaining(minsUntil) + ' until wake-up';
-      return;
-    }
+        const text = document.createElement('span');
+        text.className = 'gm-text';
+        text.textContent = task.text;
+        li.appendChild(text);
 
-    if (hours >= SLEEP_HOUR) {
-      fillEl.setAttribute('stroke-dashoffset', 0);
-      fillEl.style.stroke = '#E25D7A';
-      percentEl.textContent = '100%';
-      phaseEl.textContent   = 'PAST BEDTIME';
-      statusEl.textContent  = '⚠️ Past bedtime';
-      remainingEl.textContent = 'Sleep!';
-      return;
-    }
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'goal-delete';
+        del.setAttribute('aria-label', 'Delete task');
+        del.textContent = '×';
+        del.addEventListener('click', async () => {
+          li.style.opacity = '0.4';
+          try {
+            await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, task.id);
+            tasks = tasks.filter(t => t.id !== task.id);
+            render();
+          } catch(err) {
+            console.error(err);
+            li.style.opacity = '1';
+            alert('Failed to delete task.');
+          }
+        });
+        li.appendChild(del);
 
-    const span = SLEEP_HOUR - WAKE_HOUR;
-    const percent = (hours - WAKE_HOUR) / span * 100;
-    fillEl.setAttribute('stroke-dashoffset', C * (1 - percent / 100));
-    fillEl.style.stroke = rgb(paletteAt(percent));
-    percentEl.textContent = Math.floor(percent) + '%';
-
-    let phase, status;
-    if (percent < 25)      { phase = 'MORNING';   status = '☀️ Morning — fresh start'; }
-    else if (percent < 50) { phase = 'MIDDAY';    status = '⚡ Midday — keep moving'; }
-    else if (percent < 75) { phase = 'AFTERNOON'; status = '🔥 Afternoon — push it'; }
-    else if (percent < 90) { phase = 'EVENING';   status = '⏳ Evening — wrap up'; }
-    else                   { phase = 'BEDTIME';   status = '🌙 Bedtime soon'; }
-    phaseEl.textContent  = phase;
-    statusEl.textContent = status;
-
-    const minsLeft = (SLEEP_HOUR - hours) * 60;
-    remainingEl.textContent = formatRemaining(minsLeft) + ' awake time left';
-  }
-
-  // ---------- Row building ----------
-  function makeInlineEdit(textEl, goals, idx, key, reload) {
-    textEl.addEventListener('click', () => {
-      if (textEl.getAttribute('contenteditable') === 'true') return;
-      const original = textEl.textContent;
-      textEl.setAttribute('contenteditable', 'true');
-      textEl.focus();
-      const range = document.createRange();
-      range.selectNodeContents(textEl);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(range);
-
-      function commit() {
-        const next = textEl.textContent.trim();
-        textEl.removeAttribute('contenteditable');
-        if (next && next !== original) {
-          const list = getGoals(key);
-          if (list[idx]) { list[idx].text = next; setGoals(key, list); }
-          reload();
-        } else {
-          textEl.textContent = original;
-        }
-      }
-      function cancel() {
-        textEl.removeAttribute('contenteditable');
-        textEl.textContent = original;
-      }
-      textEl.addEventListener('blur', commit, { once: true });
-      textEl.addEventListener('keydown', function onKey(e) {
-        if (e.key === 'Enter') { e.preventDefault(); textEl.removeEventListener('keydown', onKey); textEl.blur(); }
-        else if (e.key === 'Escape') { e.preventDefault(); textEl.removeEventListener('keydown', onKey); cancel(); }
+        listEl.appendChild(li);
       });
-    });
-  }
+    }
 
-  function wireDragReorder(row, listEl, key, reload) {
-    row.setAttribute('draggable', 'true');
-    row.addEventListener('dragstart', (e) => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', row.dataset.idx);
-    });
-    row.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      row.classList.add('is-drag-over');
-    });
-    row.addEventListener('dragleave', () => row.classList.remove('is-drag-over'));
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      row.classList.remove('is-drag-over');
-      const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
-      const to   = parseInt(row.dataset.idx, 10);
-      if (isNaN(from) || isNaN(to) || from === to) return;
-      const list = getGoals(key);
-      const [moved] = list.splice(from, 1);
-      list.splice(to, 0, moved);
-      setGoals(key, list);
-      reload();
-    });
-  }
-
-  function buildGoalRow(goal, idx, key, readOnly, reload) {
-    const li = document.createElement('li');
-    li.className = 'gm-row';
-    li.dataset.idx = String(idx);
-    if (goal.done) li.classList.add('gm-row-done');
-    if (goal.queued) li.classList.add('gm-row-queued');
-
-    const handle = document.createElement('span');
-    handle.className = 'gm-handle';
-    handle.textContent = '⋮⋮';
-    li.appendChild(handle);
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'gm-check';
-    cb.checked = !!goal.done;
-    if (readOnly) { cb.disabled = true; cb.title = 'Activates at 6 AM tomorrow'; }
-    cb.addEventListener('change', () => {
-      const list = getGoals(key);
-      if (!list[idx]) return;
-      list[idx].done = cb.checked;
-      if (cb.checked) list[idx].doneAt = Date.now();
-      else delete list[idx].doneAt;
-      setGoals(key, list);
-      reload();
-    });
-    li.appendChild(cb);
-
-    const text = document.createElement('span');
-    text.className = 'gm-text';
-    text.textContent = goal.text;
-    li.appendChild(text);
-    makeInlineEdit(text, null, idx, key, reload);
-
-    const queueBtn = document.createElement('button');
-    queueBtn.type = 'button';
-    queueBtn.className = 'gm-queue-btn' + (goal.queued ? ' gm-queue-active' : '');
-    queueBtn.textContent = '⚡';
-    queueBtn.title = 'Queue for productivity window';
-    if (readOnly) queueBtn.disabled = true;
-    queueBtn.addEventListener('click', () => {
-      const list = getGoals(key);
-      if (!list[idx]) return;
-      list[idx].queued = !list[idx].queued;
-      setGoals(key, list);
-      li.classList.add('is-queue-flashing');
-      setTimeout(reload, 480);
-    });
-    li.appendChild(queueBtn);
-
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'goal-delete';
-    del.setAttribute('aria-label', 'Delete goal');
-    del.textContent = '×';
-    del.addEventListener('click', () => {
-      const list = getGoals(key);
-      list.splice(idx, 1);
-      setGoals(key, list);
-      reload();
-    });
-    li.appendChild(del);
-
-    wireDragReorder(li, null, key, reload);
-    return li;
-  }
-
-  // ---------- Renderers ----------
-  function renderTodayHeader() {
-    const goals = getGoals(todayKey());
-    const total = goals.length;
-    const done  = goals.filter(g => g.done).length;
-    document.getElementById('gmProgressNum').textContent   = done;
+    document.getElementById('gmProgressNum').textContent = done;
     document.getElementById('gmProgressTotal').textContent = '/ ' + total;
+    
     const label = document.getElementById('gmProgressLabel');
-    if (total === 0)        label.textContent = 'no goals yet';
+    if (total === 0) label.textContent = 'no tasks yet';
     else if (done === total) label.textContent = 'all done — solid day';
-    else                     label.textContent = 'complete';
-
-    document.getElementById('todayLabel').textContent =
-      'Today — ' + formatDate(getActiveDateString());
+    else label.textContent = 'complete';
 
     const bar = document.getElementById('gmBar');
-    bar.innerHTML = '';
-    goals.forEach(g => {
-      const seg = document.createElement('div');
-      seg.className = 'gm-bar-seg' + (g.done ? ' gm-bar-seg-done' : '');
-      bar.appendChild(seg);
-    });
+    if (bar) {
+      bar.innerHTML = '';
+      tasks.forEach(t => {
+        const seg = document.createElement('div');
+        seg.className = 'gm-bar-seg' + (t.completed ? ' gm-bar-seg-done' : '');
+        bar.appendChild(seg);
+      });
+    }
 
     const card = document.getElementById('gmCardToday');
-    card.classList.toggle('gm-all-done', total > 0 && done === total);
+    if (card) {
+      card.classList.toggle('gm-all-done', total > 0 && done === total);
+    }
 
-    const pushBtn = document.getElementById('gmPushBtn');
-    pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
+    tick();
   }
 
-  function renderStreak() {
-    const s = loadStreak();
-    document.getElementById('gmStreakNum').textContent = s.count;
-    document.getElementById('gmStreak').classList.toggle('gm-streak-active', s.count > 0);
-  }
+  // Add Task handlers
+  const goalInput = document.getElementById('goalInput');
+  const goalAddBtn = document.getElementById('goalAddBtn');
 
-  function renderTomorrowCount() {
-    const list = getGoals(tomorrowKey());
-    document.getElementById('gmTomorrowCount').textContent = list.length + ' planned';
-    document.getElementById('tomorrowLabel').textContent =
-      'Plan tomorrow — ' + formatDate(getTomorrowDateString());
-  }
-
-  function renderListInto(goals, listEl, emptyEl, key, readOnly) {
-    listEl.innerHTML = '';
-    emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
-    const reload = () => (key === todayKey() ? loadToday() : loadTomorrow());
-
-    const visible = goals.length > 5 ? goals.slice(0, 5) : goals;
-    visible.forEach((g, i) => listEl.appendChild(buildGoalRow(g, i, key, readOnly, reload)));
-
-    if (goals.length > 5) {
-      let expanded = false;
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'gm-show-toggle';
-      const updateLabel = () => {
-        toggle.textContent = expanded ? 'Show less ▴' : ('Show ' + (goals.length - 5) + ' more ▾');
-      };
-      updateLabel();
-      toggle.addEventListener('click', () => {
-        expanded = !expanded;
-        if (expanded) {
-          goals.slice(5).forEach((g, i) => {
-            const row = buildGoalRow(g, i + 5, key, readOnly, reload);
-            listEl.insertBefore(row, toggle);
-          });
-        } else {
-          Array.from(listEl.querySelectorAll('.gm-row')).slice(5).forEach(r => r.remove());
+  async function handleAddTask() {
+    const text = goalInput.value.trim();
+    if (!text) return;
+    
+    goalInput.disabled = true;
+    goalAddBtn.disabled = true;
+    
+    try {
+      const res = await databases.createDocument(
+        DATABASE_ID,
+        COLLECTION_ID,
+        Appwrite.ID.unique(),
+        {
+          text: text,
+          completed: false
         }
-        updateLabel();
+      );
+      tasks.push({
+        id: res.$id,
+        text: res.text,
+        completed: !!res.completed
       });
-      listEl.appendChild(toggle);
+      goalInput.value = '';
+      render();
+    } catch(err) {
+      console.error(err);
+      alert('Failed to add task: ' + (err.message || err));
+    } finally {
+      goalInput.disabled = false;
+      goalAddBtn.disabled = false;
+      goalInput.focus();
     }
-
-    if (key === todayKey()) renderTodayHeader();
-    else                    renderTomorrowCount();
   }
-
-  function loadToday() {
-    const goals = getGoals(todayKey());
-    renderListInto(goals, document.getElementById('goalList'), document.getElementById('emptyState'), todayKey(), false);
-  }
-  function loadTomorrow() {
-    const goals = getGoals(tomorrowKey());
-    renderListInto(goals, document.getElementById('tomorrowList'), document.getElementById('tomorrowEmpty'), tomorrowKey(), true);
-  }
-
-  // ---------- Push remaining ----------
-  document.getElementById('gmPushBtn').addEventListener('click', () => {
-    const today    = getGoals(todayKey());
-    const remaining = today.filter(g => !g.done);
-    if (remaining.length === 0) return;
-    if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
-    const tomorrow = getGoals(tomorrowKey());
-    const seen = new Set(tomorrow.map(g => g.text));
-    remaining.forEach(g => {
-      if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
-    });
-    setGoals(tomorrowKey(), tomorrow);
-    setGoals(todayKey(), today.filter(g => g.done));
-    loadToday(); loadTomorrow();
-  });
-
-  // ---------- Add + Polish handlers ----------
-  function showStatus(el, message, isError) {
-    el.textContent = message;
-    el.classList.toggle('gm-status-error', !!isError);
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.textContent = ''; el.classList.remove('gm-status-error'); }, 3500);
-  }
-
-  async function polishOne(text) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content:
-            'Rewrite this single goal so it is concrete, action-oriented, and under 60 characters. ' +
-            'Return ONLY a JSON array with exactly one string, no preamble, no code fences.\n\nGoal: ' + text
-        }]
-      })
-    });
-    const data = await res.json();
-    const content = (data && data.content && data.content[0] && data.content[0].text) || '';
-    const arr = JSON.parse(content);
-    if (!Array.isArray(arr) || arr.length < 1 || typeof arr[0] !== 'string') throw new Error('bad response');
-    return arr[0].trim();
-  }
-
-  function makeAddHandlers(input, addBtn, polishBtn, key, statusEl, reload) {
-    function plainAdd(text) {
-      const list = getGoals(key);
-      list.push({ text, done: false });
-      setGoals(key, list);
-      input.value = '';
-      reload();
-    }
-    addBtn.addEventListener('click', () => {
-      const text = input.value.trim();
-      if (!text) return;
-      plainAdd(text);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
-    });
-    polishBtn.addEventListener('click', async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      if (!ANTHROPIC_API_KEY) {
-        plainAdd(text);
-        showStatus(statusEl, 'Polish needs an Anthropic API key — added as-typed.', false);
-        return;
-      }
-      polishBtn.disabled = true;
-      try {
-        const polished = await polishOne(text);
-        plainAdd(polished);
-      } catch (e) {
-        plainAdd(text);
-        showStatus(statusEl, 'Polish failed — added as-typed.', true);
-      } finally {
-        polishBtn.disabled = false;
-      }
-    });
-  }
-
-  makeAddHandlers(
-    document.getElementById('goalInput'),
-    document.getElementById('goalAddBtn'),
-    document.getElementById('goalPolishBtn'),
-    todayKey(),
-    document.getElementById('polishStatus'),
-    loadToday
-  );
-  makeAddHandlers(
-    document.getElementById('tomorrowInput'),
-    document.getElementById('tomorrowAddBtn'),
-    document.getElementById('tomorrowPolishBtn'),
-    tomorrowKey(),
-    document.getElementById('tomorrowStatus'),
-    loadTomorrow
-  );
 
   // ---------- Boot ----------
-  rollover();
-  processStreak();
-  loadToday();
-  loadTomorrow();
-  renderStreak();
-  updateDayRing();
-  setInterval(updateDayRing, 60 * 1000);
-  startTicker();
+  function boot() {
+    document.getElementById('todayLabel').textContent = 'Tasks — ' + formatDate(getActiveDateString());
+    
+    // Hide unused tomorrow and AI polish elements
+    document.getElementById('gmCardTomorrow').style.display = 'none';
+    document.getElementById('gmPushBtn').style.display = 'none';
+    document.getElementById('goalPolishBtn').style.display = 'none';
+    
+    goalAddBtn.addEventListener('click', handleAddTask);
+    goalInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleAddTask();
+    });
 
-  // Re-render when storage changes from another tab (or our bridged parent).
-  window.addEventListener('storage', () => {
-    loadToday(); loadTomorrow(); renderStreak();
-  });
+    updateDayRing();
+    setInterval(updateDayRing, 60 * 1000);
+    startTicker();
+    
+    fetchTasks();
+  }
+
+  boot();
+
 })();
 </script>
-  <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    if (typeof initCloudSync !== 'function') return;
-    initCloudSync({
-      appKey: 'goals',
-      syncedPrefixes: ['goals:'],
-      onApplied: function () {
-        window.dispatchEvent(new CustomEvent('goals-changed'));
-        window.dispatchEvent(new Event('storage'));
-      }
-    });
-  });
-  </script>
 </body>
 </html>
