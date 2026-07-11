@@ -884,7 +884,7 @@ body::after {
       const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
       tasks = res.documents.map(doc => ({
         id: doc.$id,
-        text: doc.text || '',
+        text: doc.title || '',
         completed: !!doc.completed
       }));
       render();
@@ -1009,13 +1009,13 @@ body::after {
         COLLECTION_ID,
         Appwrite.ID.unique(),
         {
-          text: text,
+          title: text,
           completed: false
         }
       );
       tasks.push({
         id: res.$id,
-        text: res.text,
+        text: res.title,
         completed: !!res.completed
       });
       goalInput.value = '';

@@ -763,6 +763,14 @@ html, body {
   // Trigger sync on load
   syncCloudWaterCount();
 
+  // Listen for storage events from other tabs or the parent page topbar quick-log
+  window.addEventListener('storage', (e) => {
+    if (e.key === LS_KEY) {
+      state = loadState();
+      renderAll();
+    }
+  });
+
   async function setTodayCount(n) {
     const k = todayKey();
     const count = Math.max(0, n);
