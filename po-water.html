@@ -1035,8 +1035,12 @@ html, body {
   if (waterPlusBtn) {
     waterPlusBtn.addEventListener('click', () => {
       console.log('Water button clicked');
-      setTodayCount(todayCount() + 1);
-      renderWater();
+      if (window.parent && typeof window.parent.topbarAddWater === 'function') {
+        window.parent.topbarAddWater();
+      } else {
+        setTodayCount(todayCount() + 1);
+        renderWater();
+      }
       const btn = document.querySelector('#waterPlusBtn');
       if (btn) {
         btn.style.transform = 'scale(0.97)';

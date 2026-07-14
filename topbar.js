@@ -748,4 +748,6 @@ html.light-theme .wt-photo-weight {
   } else {
     boot();
   }
+
+  window.topbarAddWater = addWater;
 })();
