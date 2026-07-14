@@ -576,14 +576,22 @@ main {
   'use strict';
 
   // Appwrite Configuration
-  const client = new Appwrite.Client();
-  client
-    .setEndpoint('https://sgp.cloud.appwrite.io/v1')
-    .setProject('6a524830000a1a6c4eee');
-
-  const databases = new Appwrite.Databases(client);
+  let client = null;
+  let databases = null;
   const DATABASE_ID = '6a52491c00049194c4d1';
   const COLLECTION_ID = 'health_logs';
+
+  if (typeof Appwrite !== 'undefined') {
+    try {
+      client = new Appwrite.Client();
+      client
+        .setEndpoint('https://sgp.cloud.appwrite.io/v1')
+        .setProject('6a524830000a1a6c4eee');
+      databases = new Appwrite.Databases(client);
+    } catch (err) {
+      console.error('Appwrite init error:', err);
+    }
+  }
 
   const storeGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
   const storeSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -696,7 +704,7 @@ main {
   async function setItems(items) {
     inMemoryItems = items;
     render();
-    if (!window.Appwrite) return;
+    if (!databases) return;
     try {
       try {
         await databases.updateDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_items', {
@@ -721,7 +729,7 @@ main {
   async function setLow(arr) {
     inMemoryLow = arr;
     render();
-    if (!window.Appwrite) return;
+    if (!databases) return;
     try {
       try {
         await databases.updateDocument(DATABASE_ID, COLLECTION_ID, 'health_stack_low', {
@@ -755,6 +763,7 @@ main {
       setTaken(taken);
       render();
 
+      if (!databases) return;
       try {
         await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, docId);
       } catch (err) {
@@ -765,6 +774,7 @@ main {
       setTaken(taken);
       render();
 
+      if (!databases) return;
       try {
         try {
           await databases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, {
@@ -1179,6 +1189,7 @@ main {
   }
 
   async function fetchHealthLogs() {
+    if (!databases) return;
     if (!metricsList) return;
     metricsLoading.style.display = 'block';
     metricsEmpty.style.display = 'none';
@@ -1285,6 +1296,10 @@ main {
   if (healthLogForm) {
     healthLogForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!databases) {
+        alert('Appwrite is offline/not initialized.');
+        return;
+      }
       const mName = metricName.value.trim();
       const mVal = metricValue.value.trim();
       const mDate = metricDate.value;
@@ -1326,6 +1341,7 @@ main {
 
   if (metricsList) {
     metricsList.addEventListener('click', async (e) => {
+      if (!databases) return;
       const btn = e.target.closest('button[data-action="delete-metric"]');
       if (!btn) return;
       const id = btn.getAttribute('data-id');

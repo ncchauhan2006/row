@@ -3153,16 +3153,24 @@ img, video, canvas, svg { max-width: 100%; }
   //
   // SETUP (5 minutes, all in a browser):
   // Appwrite Configuration
-  const client = new Appwrite.Client();
-  client
-    .setEndpoint('https://sgp.cloud.appwrite.io/v1')
-    .setProject('6a524830000a1a6c4eee');
-
-  const databases = new Appwrite.Databases(client);
+  let client = null;
+  let databases = null;
   const DATABASE_ID = '6a52491c00049194c4d1';
   const COLLECTION_ID = 'fitness_logs';
   const APP_KEY = 'po-coach';
   const DOC_ID = 'po_coach_state';
+
+  if (typeof Appwrite !== 'undefined') {
+    try {
+      client = new Appwrite.Client();
+      client
+        .setEndpoint('https://sgp.cloud.appwrite.io/v1')
+        .setProject('6a524830000a1a6c4eee');
+      databases = new Appwrite.Databases(client);
+    } catch (err) {
+      console.error('Appwrite init error:', err);
+    }
+  }
 
   const PC_SYNCED_KEYS = ['po_coach_v1', 'po_coach_workout_done', 'po_coach_weights', 'po_coach_photos'];
 
@@ -3273,6 +3281,7 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   async function pcPushNow() {
+    if (!databases) return;
     const state = pcCollectState();
     const json = JSON.stringify(state);
     if (json === pcLastSyncedJson) return;
@@ -3307,6 +3316,7 @@ img, video, canvas, svg { max-width: 100%; }
 
   // Initial sync: connect Appwrite, pull current state
   (async function pcInitCloudSync() {
+    if (!databases) return;
     try {
       const doc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, DOC_ID);
       if (doc && doc.details) {

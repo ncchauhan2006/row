@@ -699,13 +699,22 @@ html, body {
   // ============================================================
   // STATE & Appwrite configuration
   // ============================================================
-  const client = new Appwrite.Client();
-  client
-    .setEndpoint('https://sgp.cloud.appwrite.io/v1')
-    .setProject('6a524830000a1a6c4eee');
-  const databases = new Appwrite.Databases(client);
+  let client = null;
+  let databases = null;
   const DATABASE_ID = '6a52491c00049194c4d1';
   const COLLECTION_ID = 'health_logs';
+
+  if (typeof Appwrite !== 'undefined') {
+    try {
+      client = new Appwrite.Client();
+      client
+        .setEndpoint('https://sgp.cloud.appwrite.io/v1')
+        .setProject('6a524830000a1a6c4eee');
+      databases = new Appwrite.Databases(client);
+    } catch (err) {
+      console.error('Appwrite init error:', err);
+    }
+  }
 
   const LS_KEY = 'po_water_v1';
   function loadState() {
@@ -729,7 +738,7 @@ html, body {
   }
   
   async function pushWaterGoalToAppwrite(goal) {
-    if (!window.Appwrite) return;
+    if (!databases) return;
     const docId = 'water_goal_target';
     try {
       try {
@@ -771,6 +780,7 @@ html, body {
   function todayCount() { return state.logs[todayKey()] || 0; }
   
   async function syncCloudWaterCount() {
+    if (!databases) return;
     const k = todayKey();
     const docId = `water_${k.replace(/-/g, '_')}`;
     try {
@@ -817,25 +827,33 @@ html, body {
     else state.logs[k] = count;
     saveState();
     window.dispatchEvent(new Event('storage'));
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {}
 
     // Sync to Appwrite
+    if (!databases) return;
     const docId = `water_${k.replace(/-/g, '_')}`;
     try {
-      await databases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, {
-        value: count.toString()
-      });
-    } catch (e) {
-      if (e.code === 404) {
-        try {
+      try {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, {
+          value: count.toString()
+        });
+      } catch (e) {
+        if (e.code === 404) {
           await databases.createDocument(DATABASE_ID, COLLECTION_ID, docId, {
             metric: 'Water',
             value: count.toString(),
             date: k
           });
-        } catch (err) {
-          console.error(err);
+        } else {
+          throw e;
         }
       }
+    } catch (err) {
+      console.error('Appwrite water sync error:', err);
     }
   }
 

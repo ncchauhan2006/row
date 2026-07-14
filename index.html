@@ -697,14 +697,22 @@ body::after {
   'use strict';
 
   // Appwrite Configuration
-  const client = new Appwrite.Client();
-  client
-    .setEndpoint('https://sgp.cloud.appwrite.io/v1')
-    .setProject('6a524830000a1a6c4eee');
-
-  const databases = new Appwrite.Databases(client);
+  let client = null;
+  let databases = null;
   const DATABASE_ID = '6a52491c00049194c4d1';
   const COLLECTION_ID = 'main_tasks';
+
+  if (typeof Appwrite !== 'undefined') {
+    try {
+      client = new Appwrite.Client();
+      client
+        .setEndpoint('https://sgp.cloud.appwrite.io/v1')
+        .setProject('6a524830000a1a6c4eee');
+      databases = new Appwrite.Databases(client);
+    } catch (err) {
+      console.error('Appwrite init error:', err);
+    }
+  }
 
   let tasks = [];
 
@@ -880,6 +888,7 @@ body::after {
 
   // ---------- Fetch Tasks ----------
   async function fetchTasks() {
+    if (!databases) return;
     try {
       const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
       tasks = res.documents.map(doc => ({
@@ -922,6 +931,11 @@ body::after {
         cb.className = 'gm-check';
         cb.checked = task.completed;
         cb.addEventListener('change', async () => {
+          if (!databases) {
+            task.completed = cb.checked;
+            render();
+            return;
+          }
           cb.disabled = true;
           try {
             await databases.updateDocument(DATABASE_ID, COLLECTION_ID, task.id, {
@@ -949,6 +963,11 @@ body::after {
         del.setAttribute('aria-label', 'Delete task');
         del.textContent = '×';
         del.addEventListener('click', async () => {
+          if (!databases) {
+            tasks = tasks.filter(t => t.id !== task.id);
+            render();
+            return;
+          }
           li.style.opacity = '0.4';
           try {
             await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, task.id);
@@ -999,6 +1018,17 @@ body::after {
   async function handleAddTask() {
     const text = goalInput.value.trim();
     if (!text) return;
+    
+    if (!databases) {
+      tasks.push({
+        id: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        text: text,
+        completed: false
+      });
+      goalInput.value = '';
+      render();
+      return;
+    }
     
     goalInput.disabled = true;
     goalAddBtn.disabled = true;

@@ -640,6 +640,11 @@ html.light-theme .wt-photo-weight {
     state.logs[k] = (state.logs[k] || 0) + 1;
     try { localStorage.setItem('po_water_v1', JSON.stringify(state)); } catch (e) {}
     render();
+    document.querySelectorAll('iframe').forEach(iframe => {
+      try {
+        iframe.contentWindow.dispatchEvent(new Event('storage'));
+      } catch (e) {}
+    });
     const btn = document.getElementById('topbarWaterAdd');
     if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 220); }
     pushWaterToAppwrite(state.logs[k]);
