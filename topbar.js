@@ -650,6 +650,25 @@ html.light-theme .wt-photo-weight {
     pushWaterToAppwrite(state.logs[k]);
   }
 
+  function subtractWater() {
+    let state = null;
+    try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
+    if (!state || typeof state !== 'object') state = defaultWaterState();
+    state.logs = state.logs || {};
+    const k = calendarDateKey();
+    const count = Math.max(0, (state.logs[k] || 0) - 1);
+    if (count <= 0) delete state.logs[k];
+    else state.logs[k] = count;
+    try { localStorage.setItem('po_water_v1', JSON.stringify(state)); } catch (e) {}
+    render();
+    document.querySelectorAll('iframe').forEach(iframe => {
+      try {
+        iframe.contentWindow.dispatchEvent(new Event('storage'));
+      } catch (e) {}
+    });
+    pushWaterToAppwrite(count);
+  }
+
   function blockGesture(e) { e.preventDefault(); }
   function lockGestures() {
     document.addEventListener('gesturestart', blockGesture, { passive: false });
@@ -688,14 +707,7 @@ html.light-theme .wt-photo-weight {
 
   function boot() {
     injectStyleAndHTML();
-    const topbarWaterAdd = document.querySelector('#topbarWaterAdd');
-    if (topbarWaterAdd) {
-      topbarWaterAdd.addEventListener('click', (e) => {
-        e.preventDefault();
-        console.log('Water button clicked');
-        addWater();
-      });
-    }
+
     
     const themeBtn = document.getElementById('topbarThemeToggle');
     if (themeBtn) {
@@ -750,4 +762,46 @@ html.light-theme .wt-photo-weight {
   }
 
   window.topbarAddWater = addWater;
+  window.topbarSubtractWater = subtractWater;
+
+  document.body.addEventListener('click', (e) => {
+    const topbarPlus = e.target.closest('#topbarWaterAdd');
+    if (topbarPlus) {
+      e.preventDefault();
+      console.log('Water button clicked');
+      addWater();
+      return;
+    }
+
+    const mainPlus = e.target.closest('#waterPlusBtn');
+    if (mainPlus) {
+      e.preventDefault();
+      console.log('Water button clicked');
+      mainPlus.style.transform = 'scale(0.97)';
+      setTimeout(() => { mainPlus.style.transform = ''; }, 120);
+      if (window.parent && typeof window.parent.topbarAddWater === 'function') {
+        window.parent.topbarAddWater();
+      } else {
+        if (typeof window.topbarAddWater === 'function') {
+          window.topbarAddWater();
+        }
+      }
+      return;
+    }
+
+    const mainMinus = e.target.closest('#waterMinusBtn');
+    if (mainMinus) {
+      e.preventDefault();
+      console.log('Water minus button clicked');
+      mainMinus.style.transform = 'scale(0.97)';
+      setTimeout(() => { mainMinus.style.transform = ''; }, 120);
+      if (window.parent && typeof window.parent.topbarSubtractWater === 'function') {
+        window.parent.topbarSubtractWater();
+      } else {
+        if (typeof window.topbarSubtractWater === 'function') {
+          window.topbarSubtractWater();
+        }
+      }
+    }
+  });
 })();

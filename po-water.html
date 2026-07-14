@@ -1031,27 +1031,7 @@ html, body {
   // ============================================================
   // EVENT WIRING
   // ============================================================
-  const waterPlusBtn = document.querySelector('#waterPlusBtn');
-  if (waterPlusBtn) {
-    waterPlusBtn.addEventListener('click', () => {
-      console.log('Water button clicked');
-      if (window.parent && typeof window.parent.topbarAddWater === 'function') {
-        window.parent.topbarAddWater();
-      } else {
-        setTodayCount(todayCount() + 1);
-        renderWater();
-      }
-      const btn = document.querySelector('#waterPlusBtn');
-      if (btn) {
-        btn.style.transform = 'scale(0.97)';
-        setTimeout(() => { btn.style.transform = ''; }, 120);
-      }
-    });
-  }
-  $('waterMinusBtn').addEventListener('click', () => {
-    setTodayCount(Math.max(0, todayCount() - 1));
-    renderWater();
-  });
+
 
   $('whyToggle').addEventListener('click', () => {
     const body = $('whyBody');
