@@ -1031,13 +1031,19 @@ html, body {
   // ============================================================
   // EVENT WIRING
   // ============================================================
-  $('waterPlusBtn').addEventListener('click', () => {
-    setTodayCount(todayCount() + 1);
-    renderWater();
-    const btn = $('waterPlusBtn');
-    btn.style.transform = 'scale(0.97)';
-    setTimeout(() => { btn.style.transform = ''; }, 120);
-  });
+  const waterPlusBtn = document.querySelector('#waterPlusBtn');
+  if (waterPlusBtn) {
+    waterPlusBtn.addEventListener('click', () => {
+      console.log('Water button clicked');
+      setTodayCount(todayCount() + 1);
+      renderWater();
+      const btn = document.querySelector('#waterPlusBtn');
+      if (btn) {
+        btn.style.transform = 'scale(0.97)';
+        setTimeout(() => { btn.style.transform = ''; }, 120);
+      }
+    });
+  }
   $('waterMinusBtn').addEventListener('click', () => {
     setTodayCount(Math.max(0, todayCount() - 1));
     renderWater();

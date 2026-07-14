@@ -688,8 +688,14 @@ html.light-theme .wt-photo-weight {
 
   function boot() {
     injectStyleAndHTML();
-    const btn = document.getElementById('topbarWaterAdd');
-    if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); addWater(); });
+    const topbarWaterAdd = document.querySelector('#topbarWaterAdd');
+    if (topbarWaterAdd) {
+      topbarWaterAdd.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Water button clicked');
+        addWater();
+      });
+    }
     
     const themeBtn = document.getElementById('topbarThemeToggle');
     if (themeBtn) {

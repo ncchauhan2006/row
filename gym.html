@@ -2155,8 +2155,10 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   function renderPastWorkouts() {
-    $('poTwPastCount').textContent = fetchedWorkouts.length;
-    const body = $('poTwPastBody');
+    const countEl = document.querySelector('#poTwPastCount');
+    if (countEl) countEl.textContent = fetchedWorkouts.length;
+    const body = document.querySelector('#poTwPastBody');
+    if (!body) return;
     if (!fetchedWorkouts.length) {
       body.innerHTML = '<div class="po-tw-past-empty">No past workouts yet.</div>';
       return;
@@ -3332,6 +3334,7 @@ img, video, canvas, svg { max-width: 100%; }
     if (!databases) return;
     try {
       const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
+      console.log('Fetched Fitness Data:', res.documents);
       
       const doc = res.documents.find(d => d.$id === DOC_ID);
       if (doc && doc.details) {
