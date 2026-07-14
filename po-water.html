@@ -510,8 +510,8 @@ html, body {
     </div>
 
     <div class="water-actions">
-      <button class="water-minus-btn" id="waterMinusBtn" type="button" aria-label="Undo last">−</button>
-      <button class="water-plus-btn" id="waterPlusBtn" type="button">
+      <button class="water-minus-btn" id="main-water-sub-btn" type="button" aria-label="Undo last">−</button>
+      <button class="water-plus-btn" id="main-water-add-btn" type="button">
         <span id="waterPlusLabel">Drank a bottle</span>
         <span>↑</span>
       </button>
@@ -947,7 +947,8 @@ html, body {
     else { helper.textContent = 'Strong — way past target.'; helper.classList.add('good'); }
 
     // Disable minus when at zero
-    $('waterMinusBtn').disabled = count <= 0;
+    const subBtn = document.getElementById('main-water-sub-btn');
+    if (subBtn) subBtn.disabled = count <= 0;
 
     renderWhy(calc, targetUnits);
     renderHistory();
@@ -1031,8 +1032,29 @@ html, body {
   // ============================================================
   // EVENT WIRING
   // ============================================================
+  const mainWaterAddBtn = document.getElementById('main-water-add-btn');
+  if (mainWaterAddBtn) {
+    mainWaterAddBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('Main water button clicked!');
+      setTodayCount(todayCount() + 1);
+      renderWater();
+      mainWaterAddBtn.style.transform = 'scale(0.97)';
+      setTimeout(() => { mainWaterAddBtn.style.transform = ''; }, 120);
+    });
+  }
 
-
+  const mainWaterSubBtn = document.getElementById('main-water-sub-btn');
+  if (mainWaterSubBtn) {
+    mainWaterSubBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('Main water button clicked!');
+      setTodayCount(Math.max(0, todayCount() - 1));
+      renderWater();
+      mainWaterSubBtn.style.transform = 'scale(0.97)';
+      setTimeout(() => { mainWaterSubBtn.style.transform = ''; }, 120);
+    });
+  }
   $('whyToggle').addEventListener('click', () => {
     const body = $('whyBody');
     const open = body.classList.contains('show');

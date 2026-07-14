@@ -708,7 +708,14 @@ html.light-theme .wt-photo-weight {
   function boot() {
     injectStyleAndHTML();
 
-    
+    const topbarWaterAdd = document.getElementById('topbarWaterAdd');
+    if (topbarWaterAdd) {
+      topbarWaterAdd.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Water button clicked');
+        addWater();
+      });
+    }    
     const themeBtn = document.getElementById('topbarThemeToggle');
     if (themeBtn) {
       themeBtn.addEventListener('click', (e) => {
@@ -764,44 +771,5 @@ html.light-theme .wt-photo-weight {
   window.topbarAddWater = addWater;
   window.topbarSubtractWater = subtractWater;
 
-  document.body.addEventListener('click', (e) => {
-    const topbarPlus = e.target.closest('#topbarWaterAdd');
-    if (topbarPlus) {
-      e.preventDefault();
-      console.log('Water button clicked');
-      addWater();
-      return;
-    }
 
-    const mainPlus = e.target.closest('#waterPlusBtn');
-    if (mainPlus) {
-      e.preventDefault();
-      console.log('Water button clicked');
-      mainPlus.style.transform = 'scale(0.97)';
-      setTimeout(() => { mainPlus.style.transform = ''; }, 120);
-      if (window.parent && typeof window.parent.topbarAddWater === 'function') {
-        window.parent.topbarAddWater();
-      } else {
-        if (typeof window.topbarAddWater === 'function') {
-          window.topbarAddWater();
-        }
-      }
-      return;
-    }
-
-    const mainMinus = e.target.closest('#waterMinusBtn');
-    if (mainMinus) {
-      e.preventDefault();
-      console.log('Water minus button clicked');
-      mainMinus.style.transform = 'scale(0.97)';
-      setTimeout(() => { mainMinus.style.transform = ''; }, 120);
-      if (window.parent && typeof window.parent.topbarSubtractWater === 'function') {
-        window.parent.topbarSubtractWater();
-      } else {
-        if (typeof window.topbarSubtractWater === 'function') {
-          window.topbarSubtractWater();
-        }
-      }
-    }
-  });
 })();
