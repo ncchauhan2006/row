@@ -2077,12 +2077,21 @@ img, video, canvas, svg { max-width: 100%; }
     return byDay;
   }
 
+  let fetchedWorkouts = [];
+
   function fmtPastDate(dk) {
-    const [y, m, d] = dk.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-    const mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    return dows[dt.getDay()] + ' ' + mons[dt.getMonth()] + ' ' + dt.getDate();
+    if (!dk) return '';
+    try {
+      const parts = dk.split('-');
+      if (parts.length < 3) return dk;
+      const [y, m, d] = parts.map(Number);
+      const dt = new Date(y, m - 1, d);
+      const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+      const mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      return dows[dt.getDay()] + ' ' + mons[dt.getMonth()] + ' ' + dt.getDate();
+    } catch(e) {
+      return dk;
+    }
   }
 
   function summarizeDay(daySets) {
@@ -2146,36 +2155,40 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   function renderPastWorkouts() {
-    const todayKey = wtDateKey(new Date());
-    const all = logsByDay();
-    const past = Object.entries(all)
-      .filter(([dk]) => dk !== todayKey)
-      .sort((a, b) => b[0].localeCompare(a[0]));
-    $('poTwPastCount').textContent = past.length;
+    $('poTwPastCount').textContent = fetchedWorkouts.length;
     const body = $('poTwPastBody');
-    if (!past.length) {
+    if (!fetchedWorkouts.length) {
       body.innerHTML = '<div class="po-tw-past-empty">No past workouts yet.</div>';
       return;
     }
-    const u = state.units;
-    body.innerHTML = past.slice(0, 30).map(([dk, sets]) => {
-      const sum = summarizeDay(sets);
-      const isDone = !!doneDays[dk];
-      const exNames = sum.perEx.map(e => e.ex.name).slice(0, 3).join(', ')
-        + (sum.perEx.length > 3 ? '…' : '');
-      return '<div class="po-tw-past-day">'
+    
+    const sorted = [...fetchedWorkouts].sort((a, b) => {
+      const dateDiff = (b.date || '').localeCompare(a.date || '');
+      if (dateDiff !== 0) return dateDiff;
+      return (b.id || '').localeCompare(a.id || '');
+    });
+
+    body.innerHTML = sorted.slice(0, 30).map(item => {
+      return '<div class="po-tw-past-day" data-id="' + item.id + '" style="cursor: pointer;">'
         + '<div class="po-tw-past-day-h">'
-        +   '<span class="po-tw-past-day-date">' + fmtPastDate(dk) + '</span>'
-        +   '<span class="po-tw-past-day-summary">'
-        +     sum.totalSets + ' sets · ' + Math.round(sum.totalVol).toLocaleString() + ' ' + u
-        +     (isDone ? ' <span class="po-tw-past-day-done">DONE</span>' : '')
-        +   '</span>'
+        +   '<span class="po-tw-past-day-date">' + fmtPastDate(item.date) + '</span>'
+        +   '<span class="po-tw-past-day-summary" style="font-weight: 700;">' + escape(item.workout) + '</span>'
         + '</div>'
-        + '<div class="po-tw-past-day-summary" style="margin-top:6px; font-size:11px; color:var(--text-3);">'
-        +   escape(exNames)
+        + '<div class="po-tw-past-details" style="display: none; margin-top: 8px; font-size: 11px; color: var(--text-3); white-space: pre-wrap; line-height: 1.5; border-left: 2px solid var(--accent, #E07658); padding-left: 8px;">'
+        +   escape(item.details)
         + '</div>'
         + '</div>';
     }).join('');
+
+    body.querySelectorAll('.po-tw-past-day').forEach(el => {
+      el.addEventListener('click', () => {
+        const detailsEl = el.querySelector('.po-tw-past-details');
+        if (detailsEl) {
+          const isHidden = detailsEl.style.display === 'none';
+          detailsEl.style.display = isHidden ? 'block' : 'none';
+        }
+      });
+    });
   }
 
   $('poTwDoneBtn').addEventListener('click', () => {
@@ -3318,7 +3331,9 @@ img, video, canvas, svg { max-width: 100%; }
   (async function pcInitCloudSync() {
     if (!databases) return;
     try {
-      const doc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, DOC_ID);
+      const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
+      
+      const doc = res.documents.find(d => d.$id === DOC_ID);
       if (doc && doc.details) {
         const remoteState = JSON.parse(doc.details);
         pcLastSyncedJson = doc.details;
@@ -3326,7 +3341,19 @@ img, video, canvas, svg { max-width: 100%; }
       } else if (Object.keys(pcCollectState()).length > 0) {
         pcSchedulePush();
       }
+
+      fetchedWorkouts = res.documents
+        .filter(d => d.$id !== DOC_ID)
+        .map(d => ({
+          id: d.$id,
+          workout: d.workout || '',
+          details: d.details || '',
+          date: d.date || ''
+        }));
+      
+      renderPastWorkouts();
     } catch (e) {
+      console.error('Appwrite initial sync error:', e);
       if (e.code === 404) {
         if (Object.keys(pcCollectState()).length > 0) {
           pcSchedulePush();
